@@ -6,6 +6,9 @@
 #include <libgen.h>
 #include <string.h>
 #include <getopt.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <openssl/md5.h>
 
 
 bool g_debug = false;
@@ -15,6 +18,7 @@ void print_usage(char * appname)
     printf("Usage: %s <dir1> <dir2>\n", appname);
 }
 
+#define BUF_SIZE 1024
 int cmp_dirs(char *src, char *dst)
 {
     DIR *d1, *d2;
@@ -59,8 +63,13 @@ end:
 
 int cmp_files(bool flat_symlink, char *src, char *dst)
 {
+    unsigned char buf[BUF_SIZE];
+    unsigned char sum[2][MD5_DIGEST_LENGTH+1];
+    char * fname[2] = {src, dst};
+    MD5_CTX md5[2];
     struct stat st[2];
-    int rc;
+    int rc, fd;
+    size_t size;
 
     if (g_debug) {
         printf("%s: Compare: %s %s\n",__func__, src,dst);
@@ -124,6 +133,45 @@ int cmp_files(bool flat_symlink, char *src, char *dst)
             printf("size test fail\n");
         }
         return -1;
+    }
+
+    /* calculate files sum */
+    for (int i = 0; i < 2; i++) {
+        MD5_Init(&md5[i]);
+        fd = open(fname[i], O_RDONLY);
+        if (fd == -1) {
+            if (g_debug) {
+                printf("read error\n");
+            }
+            return -1;
+        }
+
+        while((size = read(fd, buf, BUF_SIZE)) > 0)
+        {
+            MD5_Update(&md5[i],buf, size);
+        }
+        if (size == -1) {
+            return -1;
+        }
+
+        close(fd);
+        MD5_Final(sum[i], &md5[i]);
+        if (g_debug) {
+            printf("%s md5 ", fname[i]);
+            for(int n=0; n<MD5_DIGEST_LENGTH; n++) {
+                printf("%02x", sum[i][n]);
+            }
+            printf("\n");
+        }
+    }
+
+    for(int n=0; n<MD5_DIGEST_LENGTH; n++) {
+        if (sum[0][n] != sum[1][n]) {
+            if (g_debug) {
+                printf("md5 sum error\n");
+            }
+            return -1;
+        }
     }
 
     return 0;
