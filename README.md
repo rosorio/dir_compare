@@ -9,7 +9,7 @@ The tool check:
 * dates
 
 flat symlink option (-f)
-Perform the test even if during the compy you convert symlink into directories.
+Perform the test even if during the copy you convert symlink into directories.
 
 
 
